@@ -1,0 +1,146 @@
+---
+title: "DataCite Corpus - Data Exploration & Descriptive Statistics"
+author: "Ashvin Narayan"
+date: "2026-10-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+dirpath = "/Users/ashvin/Desktop/biomed-retractions/datacite"
+
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(123)
+
+library(tidyverse)
+library(lubridate)
+library(parallel)
+library(foreach)
+library(doParallel)
+```
+
+## DataCite Corpus - Exploratory Analysis
+
+
+
+```{r dc_summary}
+## FUNCTION: exp_summary - argument dat (dataframe)
+## Argument dat takes a dataframe. Column names are assumed to
+## match the columns provided in the DataCite Corpus as of 
+## 11 October 2026. Documentation and file downloads available 
+## at https://zenodo.org/records/16901115
+
+dc_summary <- function(dat) {
+  ## Returns descriptive statistics of the data file - number
+  ## of rows, number & proportion of rows with publication DOIs, 
+  ## number & proportion of rows with a 'created' date,
+  ## number & proportion of rows with publication dates,
+  ## number & proportion of rows with a funder listed.
+  
+  summarylist <- dat |> summarise(
+    n = nrow(dat),
+    n_doi = str_detect(dat$publication, pattern = "doi") |> sum(na.rm = TRUE),
+    n_created_date = sum(1 - is.na(dat$created), na.rm = TRUE),
+    n_pub_date = sum(1 - is.na(dat$publishedDate), na.rm = TRUE),
+    n_funders = sum(1 - is.na(dat$funders), na.rm = TRUE),
+    n_nih = str_detect(dat$funders, pattern = "(NIH)|(National Institutes of Health)") |> 
+      sum(na.rm = TRUE)
+  )
+  
+  return(summarylist)
+}
+```
+
+```{r do_dc_summary, eval=FALSE}
+## FUNCTION: do_dc_summary - wrapper for dc_summary for
+## calling with %dopar%.
+
+
+
+```
+
+```{r read_datacite}
+# Function computing descriptive stats
+# TODO: parallelize
+
+summary_datacite <- function(filenames) {
+  
+}
+
+```
+
+```{r, eval=FALSE}
+dat <- read_csv("/Users/ashvin/Desktop/biomed-retractions/datacite/data/2025-08-15-data-citation-corpus-01-v4.1.csv", na = c("", "NA", "none"))
+
+# Data frame to hold data from NIH-funded datasets.
+  nih_df <- data.frame(
+    "id" = c(),
+    "created" = c(),
+    "updated" = c(),
+    "repository" = c(),
+    "publisher" = c(),
+    "journal" = c(),
+    "title" = c(),
+    "dataset" = c(),
+    "publication" = c(),
+    "publishedDate" = c(),
+    "source" = c(),
+    "subjects" = c(),
+    "affiliations" = c(),
+    "affiliationsROR" = c(),
+    "funders" = c(),
+    "fundersROR" = c()
+  )
+  
+  # Summary data across all datasets.
+  data_summary <- data.frame(
+    "n" = c(),
+    "n_doi" = c(),
+    "n_created_date" = c(),
+    "n_pub_date" = c(),
+    "n_funders" = c(),
+    "n_nih" = c(),
+    "n_nih_ror" = c()
+  )
+  
+
+# Compute summary descriptive statistics across summary_data.
+  data_summary |> summarise(
+    Size = sum(n),
+    Num.DOI = sum(n_doi),
+    Percent.DOI = (sum(n_doi) / sum(n)) * 100,
+    Num.created = sum(n_created_date),
+    Percent.created = (sum(n_created_date) / sum(n)) * 100,
+    No.funders = (sum(n_funders)),
+    Percent.funders = (sum(n_funders) / sum(n)) * 100,
+    No.NIH.Funded = sum(n_nih)
+    No.
+  )
+
+dat_samp <- dat[sample(1:nrow(dat), 500),]
+```
+
+
+
+```{r rwatch}
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
