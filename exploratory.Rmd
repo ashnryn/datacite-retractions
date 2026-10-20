@@ -9,10 +9,9 @@ output: pdf_document
 dirpath = "/Users/ashvin/Desktop/biomed-retractions/datacite"
 
 knitr::opts_chunk$set(echo = TRUE)
-set.seed(123)
 
 library(tidyverse)
-library(lubridate)
+library(knitr)
 library(parallel)
 library(foreach)
 library(doParallel)
@@ -20,21 +19,21 @@ library(doParallel)
 
 ## DataCite Corpus - Exploratory Analysis
 
-
-
-```{r dc_summary}
+```{r get_dc_summary}
 ## FUNCTION: exp_summary - argument dat (dataframe)
 ## Argument dat takes a dataframe. Column names are assumed to
 ## match the columns provided in the DataCite Corpus as of 
 ## 11 October 2026. Documentation and file downloads available 
 ## at https://zenodo.org/records/16901115
 
-dc_summary <- function(dat) {
+get_dc_summary <- function(filename) {
   ## Returns descriptive statistics of the data file - number
   ## of rows, number & proportion of rows with publication DOIs, 
   ## number & proportion of rows with a 'created' date,
   ## number & proportion of rows with publication dates,
   ## number & proportion of rows with a funder listed.
+  
+  dat <- read_csv(file = filename, na = c("", "NA", "none"))
   
   summarylist <- dat |> summarise(
     n = nrow(dat),
@@ -44,86 +43,60 @@ dc_summary <- function(dat) {
     n_funders = sum(1 - is.na(dat$funders), na.rm = TRUE),
     n_nih = str_detect(dat$funders, pattern = "(NIH)|(National Institutes of Health)") |> 
       sum(na.rm = TRUE)
-  )
+  ) |> unlist()
   
   return(summarylist)
 }
-```
-
-```{r do_dc_summary, eval=FALSE}
-## FUNCTION: do_dc_summary - wrapper for dc_summary for
-## calling with %dopar%.
 
 
-
-```
-
-```{r read_datacite}
 # Function computing descriptive stats
 # TODO: parallelize
 
 summary_datacite <- function(filenames) {
+  cl <- makeCluster(8)
+  registerDoParallel(cl)
   
+  summ_dc <- foreach(
+    fn = filenames,
+    .combine = "rbind",
+    .export = "get_dc_summary",
+    .packages = "tidyverse"
+  ) %dopar% {
+    get_dc_summary(fn)
+  }
+  
+  stopCluster(cl)
+  
+  return(summ_dc)
 }
 
 ```
 
-```{r, eval=FALSE}
-dat <- read_csv("/Users/ashvin/Desktop/biomed-retractions/datacite/data/2025-08-15-data-citation-corpus-01-v4.1.csv", na = c("", "NA", "none"))
+```{r dc_summary, cache=TRUE}
+## TODO: Modify dirpath to current directory
+dirpath = "/Users/ashvin/Desktop/biomed-retractions/datacite"
 
-# Data frame to hold data from NIH-funded datasets.
-  nih_df <- data.frame(
-    "id" = c(),
-    "created" = c(),
-    "updated" = c(),
-    "repository" = c(),
-    "publisher" = c(),
-    "journal" = c(),
-    "title" = c(),
-    "dataset" = c(),
-    "publication" = c(),
-    "publishedDate" = c(),
-    "source" = c(),
-    "subjects" = c(),
-    "affiliations" = c(),
-    "affiliationsROR" = c(),
-    "funders" = c(),
-    "fundersROR" = c()
-  )
-  
-  # Summary data across all datasets.
-  data_summary <- data.frame(
-    "n" = c(),
-    "n_doi" = c(),
-    "n_created_date" = c(),
-    "n_pub_date" = c(),
-    "n_funders" = c(),
-    "n_nih" = c(),
-    "n_nih_ror" = c()
-  )
-  
-
-# Compute summary descriptive statistics across summary_data.
-  data_summary |> summarise(
-    Size = sum(n),
-    Num.DOI = sum(n_doi),
-    Percent.DOI = (sum(n_doi) / sum(n)) * 100,
-    Num.created = sum(n_created_date),
-    Percent.created = (sum(n_created_date) / sum(n)) * 100,
-    No.funders = (sum(n_funders)),
-    Percent.funders = (sum(n_funders) / sum(n)) * 100,
-    No.NIH.Funded = sum(n_nih)
-    No.
-  )
-
-dat_samp <- dat[sample(1:nrow(dat), 500),]
-```
+# Gets the names of files to be read int, then calls rw_merge.
+files <- list.files(path = paste0(dirpath, "/data"), 
+                    full.names = TRUE, recursive = TRUE)
 
 
 
-```{r rwatch}
+summary_dat <- summary_datacite(files) |> as.data.frame()
+row.names(summary_dat) <- c(1:nrow(summary_dat))
 
 
+summary_dat |> summarise(
+  N.obs = sum(n),
+  N.doi = sum(n_doi),
+  Prop.doi = sum(n_doi) / sum(n),
+  N.cr.date = sum(n_created_date),
+  Prop.cr.date = sum(n_created_date) / sum(n),
+  N.funders = sum(n_funders),
+  Prop.funders = sum(n_funders) / sum(n),
+  N.NIH = sum(n_nih),
+  Prop.NIH = sum(n_nih) / sum(n)
+) |> kable(digits = 4)
 ```
 
 
