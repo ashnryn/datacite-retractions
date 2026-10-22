@@ -50,7 +50,6 @@ get_dc_summary <- function(filename) {
 
 
 # Function computing descriptive stats
-# TODO: parallelize
 
 summary_datacite <- function(filenames) {
   cl <- makeCluster(8)
@@ -69,7 +68,6 @@ summary_datacite <- function(filenames) {
   
   return(summ_dc)
 }
-
 ```
 
 ```{r dc_summary, cache=TRUE}
@@ -98,21 +96,20 @@ summary_dat |> summarise(
   Prop.NIH = sum(n_nih) / sum(n)
 ) |> 
   t() |>
-  kable(digits = 4)
+  kable()
 ```
 
 ```{r read_rw_mrged}
 df <- read_csv("merged.csv")
 
-## TODO: fix merge.R to include 'created', OriginalPaperDate
 df |> summarise(
   N.obs = nrow(df),
   N.doi = sum(!is.na(publication)),
   Prop.doi = sum(!is.na(publication)) / nrow(df),
-  # N.cr.date = sum(!is.na(created)),
-  # Prop.cr.date = sum(!is.na(created)) / nrow(df),
-  # N.pub.date = sum(!is.na(OriginalPaperDate)),
-  # N.funders = sum(!is.na(OriginalPaperDate)) / nrow(df),
+  N.cr.date = sum(!is.na(created)),
+  Prop.cr.date = sum(!is.na(created)) / nrow(df),
+  N.pub.date = sum(!is.na(OriginalPaperDate)),
+  N.funders = sum(!is.na(OriginalPaperDate)) / nrow(df),
   Prop.funders = sum(!is.na(funders)) / nrow(df),
   N.NIH = sum(str_detect(funders, pattern = "(NIH)|(NATIONAL INSTITUTES OF HEALTH)") |
                 str_detect(fundersROR, pattern = "(NIH)|(NATIONAL INSTITUTES OF HEALTH)"),
@@ -128,10 +125,12 @@ df |> summarise(
 
 ### Only 1 NIH-funded publication that also appears in RW Database
 
+```{r funder-info}
 
+df |> filter(!is.na(funders) | !is.na(fundersROR)) |>
+  select(title, Title, Journal, funders, fundersROR)
 
-
-
+```
 
 
 
