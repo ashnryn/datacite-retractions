@@ -6,8 +6,6 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-dirpath = "/Users/ashvin/Desktop/biomed-retractions/datacite"
-
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)

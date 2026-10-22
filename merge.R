@@ -84,6 +84,15 @@ rw_merge <- function(filenames) {
   return(mergedc)
 }
 
+
+
+
+## TODO: Modify dirpath to current directory
+dirpath = "/Users/ashvin/Desktop/biomed-retractions/datacite"
+
+## TODO: Specify name of output file
+outfile = "merged.csv"
+
 # Gets the names of files to be read int, then calls rw_merge.
 files <- list.files(path = paste0(dirpath, "/data"), 
                     full.names = TRUE, recursive = TRUE)
@@ -113,17 +122,11 @@ colnames(merged) <- c(
 )
 
 merged <- merged %>%
+  mutate(across(c(pub.date, pub.retraction.date), as.character)) %>%
   mutate(pub.year = mdy_hm(pub.date) %>% year() %>% as.integer(), 
          .after = pub.date) %>%
   mutate(pub.retraction.year = mdy_hm(pub.retraction.date) %>% year() %>% as.integer(), 
          .after = pub.retraction.date)
 
-
-## TODO: Modify dirpath to current directory
-dirpath = "/Users/ashvin/Desktop/biomed-retractions/datacite"
-
-## TODO: Specify name of output file
-outfile = "merged.csv"
-
-write_csv(merged, file = paste(dirpath, outfile, sep = "/"), quote = "none")
+write_csv(merged, file = paste(dirpath, outfile, sep = "/"))
 
