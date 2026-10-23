@@ -108,6 +108,8 @@ df |> summarise(
   Prop.doi = sum(!is.na(data.citation.id)) / nrow(df),
   N.cr.date = sum(!is.na(data.created.date)),
   Prop.cr.date = sum(!is.na(data.created.date)) / nrow(df),
+  N.data.dois = sum(str_detect(data.id, pattern = "10\\.")),
+  Prop.data.dois = sum(str_detect(data.id, pattern = "10\\.")) / nrow(df),
   N.pub.date = sum(!is.na(pub.date)),
   N.funders = sum(!is.na(pub.date)) / nrow(df),
   Prop.funders = sum(!is.na(data.funders)) / nrow(df),
@@ -137,6 +139,9 @@ df |> filter(!is.na(data.funders) | !is.na(data.funders.ror)) |>
 ```{r repos, fig.height=10}
 df |> count(data.repository) |> arrange(desc(n))
 
+df |> filter(str_detect(data.id, pattern = "10\\.")) |>
+  count(data.repository) |> arrange(desc(n))
+
 df |> 
   filter(!is.na(data.repository) & data.repository != "UNPUBLISHED") |>
   mutate(
@@ -145,14 +150,30 @@ df |>
   mutate(
       data.repository.mod = str_remove(data.repository.mod, pattern = "\\s-\\s.*")
     ) |> 
-  ggplot(aes(data.repository.mod)) + 
-    geom_bar(fill = "turquoise3") + 
+  count(data.repository.mod) |>
+  ggplot(aes(x = reorder(data.repository.mod, n), y = n)) + 
+    geom_bar(stat = "identity", fill = "turquoise3") + 
+    labs(x = "Repository", y = "Count") +
+    coord_flip() +
+    theme_linedraw()
+
+df |> filter(str_detect(data.id, pattern = "10\\.")) |>
+  filter(!is.na(data.repository) & data.repository != "UNPUBLISHED") |>
+  mutate(
+      data.repository.mod = str_remove(data.repository, pattern = "\\s\\(.*\\)")
+    ) |> 
+  mutate(
+      data.repository.mod = str_remove(data.repository.mod, pattern = "\\s-\\s.*")
+    ) |> 
+  count(data.repository.mod) |>
+  ggplot(aes(x = reorder(data.repository.mod, n), y = n)) + 
+    geom_bar(stat = "identity", fill = "turquoise3") + 
     labs(x = "Repository", y = "Count") +
     coord_flip() +
     theme_linedraw()
 ```
 
-
+```{}
 
 
 
