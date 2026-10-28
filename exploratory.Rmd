@@ -6,22 +6,33 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+options(scipen = 999)
 
 library(tidyverse)
 library(knitr)
 library(parallel)
 library(foreach)
 library(doParallel)
+
+## TODO: Modify dirpath to current directory
+dirpath = "/Users/ashvin/Desktop/biomed-retractions/datacite"
+
+# Gets the names of files to be read int, then calls rw_merge.
+files <- list.files(path = paste0(dirpath, "/data"), 
+                    full.names = TRUE, recursive = TRUE)
 ```
 
 ## DataCite Corpus - Exploratory Analysis
 
-```{r get_dc_summary}
-## FUNCTION: exp_summary - argument dat (dataframe)
-## Argument dat takes a dataframe. Column names are assumed to
-## match the columns provided in the DataCite Corpus as of 
-## 11 October 2026. Documentation and file downloads available 
+We first look at the number and proportions of values in the DataCite corpus that are missing values for relevant variables: publication DOI/identifier, dataset creation date, article publication date, and funder information. We also return the total number of observations in the DataCite Corpus and the number of observations where the NIH is listed as a funder.
+
+```{r get_dc_summary, cache = TRUE}
+#### FUNCTION: get_dc_summary - argument filename (string) ####
+## Argument filename takes the name of a DataCite Corpus
+## file. Column names are assumed to match the columns 
+## provided in the DataCite Corpus as of 11 October 2026. 
+## Documentation and file downloads available 
 ## at https://zenodo.org/records/16901115
 
 get_dc_summary <- function(filename) {
@@ -46,9 +57,10 @@ get_dc_summary <- function(filename) {
   return(summarylist)
 }
 
-
-# Function computing descriptive stats
-
+#### FUNCTION: summary_datacite - argument filenames (string or vector of strings) ####
+## Argument filenames stores names of DataCite Corpus files. 
+## Calls  get_dc_summary to compute summary statistics for 
+## each data file, returns a dataset.
 summary_datacite <- function(filenames) {
   cl <- makeCluster(8)
   registerDoParallel(cl)
@@ -66,22 +78,15 @@ summary_datacite <- function(filenames) {
   
   return(summ_dc)
 }
-```
 
-```{r dc_summary, cache=TRUE}
-## TODO: Modify dirpath to current directory
-dirpath = "/Users/ashvin/Desktop/biomed-retractions/datacite"
+#### Call summary_datacite ####
 
-# Gets the names of files to be read int, then calls rw_merge.
-files <- list.files(path = paste0(dirpath, "/data"), 
-                    full.names = TRUE, recursive = TRUE)
-
-
-
+# Call summary_datacite, get dataset of summary statistics for
+# each data file, reset row names to indexes
 summary_dat <- summary_datacite(files) |> as.data.frame()
 row.names(summary_dat) <- c(1:nrow(summary_dat))
 
-
+# Compute summary statistics across summary_dat (for whole dataset)
 summary_dat |> summarise(
   N.obs = sum(n),
   N.doi = sum(n_doi),
@@ -94,10 +99,124 @@ summary_dat |> summarise(
   Prop.NIH = sum(n_nih) / sum(n)
 ) |> 
   t() |>
-  kable()
+  kable(digits = 4)
 ```
 
+## NIH-Funded Datasets
 
+We then look at the number of datasets listed in the DataCite Corpus that list NIH (U.S. National Institutes of Health) as a funder. We check both the funders and fundersROR columns.
+
+```{r nih-data}
+#### FUNCTION: nih_subset - argument filename (string) ####
+## Argument filename takes the name of a DataCite Corpus file.
+## The function returns the subset of observations that list NIH
+## as a funder.
+get_nih_subset <- function(filename) {
+  dat <- read_csv(file = filename, na = c("", "NA", "none")) |>
+    filter(
+      if_any(any_of(c("funders", "fundersROR")), 
+             ~str_detect(., pattern = "(NIH)|(National Institutes of Health)"))
+    )
+  return(dat)
+}
+
+#### FUNCTION: nih_subset - argument filenames (string or vector of strings) ####
+## Argument filenames stores names of  DataCite Corpus files. Calls  
+## get_nih_subset to return the subset of all DataCite data files, 
+## that list NIH as a funder. Returns a dataset.
+nih_subset <- function(filenames) {
+  cl <- makeCluster(8)
+  registerDoParallel(cl)
+  
+  summ_dc <- foreach(
+    fn = filenames,
+    .combine = "rbind",
+    .export = "get_nih_subset",
+    .packages = "tidyverse"
+  ) %dopar% {
+    get_nih_subset(fn)
+  }
+  
+  stopCluster(cl)
+  
+  return(summ_dc)
+}
+
+# Get subset of DataCite Corpus that are NIH-funded
+nih_dat <- nih_subset(files) |> as.data.frame()
+
+# Compute summary statistics across for NIH-funded datasets only
+nih_dat |> summarise(
+  N.obs = nrow(nih_dat),
+  N.doi = sum(!is.na(publication)),
+  Prop.doi = sum(!is.na(publication)) / nrow(nih_dat),
+  N.cr.date = sum(!is.na(created)),
+  Prop.cr.date = sum(!is.na(created)) / nrow(nih_dat),
+) |> 
+  t() |>
+  kable(digits = 4)
+```
+
+## Retraction Watch Database
+
+```{r rw-data}
+# load retraction watch data
+rw <- data.frame(read.csv(
+  "https://raw.githubusercontent.com/ashnryn/article-retractions/refs/heads/main/retraction-watch/retraction_watch.csv",
+  na.strings = c("", "unavailable")
+))
+
+#### Retraction Watch entries without DOIs ####
+rw <- rw |> filter(is.na(OriginalPaperDOI))
+
+# What journals are represented?
+# rw |> count(Journal) |> arrange(desc(n)) |> head(20)
+rw |> filter(str_detect(Journal, pattern = "Conference")) |> nrow() # Majority are conference papers
+
+# Which countries are represented?
+rw |> count(Country) |> 
+  mutate(p = round(n / nrow(rw), 4)) |> 
+  arrange(desc(n)) |>
+  head(20) # Majority were published in China
+
+rw <- rw |>
+  mutate(across(c(OriginalPaperDate, RetractionDate), as.character)) |>
+  mutate(pub.year = mdy_hm(OriginalPaperDate) |> year() |> as.integer(), 
+         .after = OriginalPaperDate) |>
+  mutate(ret.year = mdy_hm(RetractionDate) |> year() |> as.integer(), 
+         .after = RetractionDate)
+
+rw$pub.year[which(is.na(rw$pub.year))] = 1753
+
+# Min and max publication dates?
+cbind(min.date = min(rw$OriginalPaperDate), 
+      max.date = max(rw$OriginalPaperDate))
+
+## The 1953 one is the "first ever english language retraction", per RW
+## Benjamin Wilson, "Treatise upon Electricity"
+
+## 2016 is "Expression of FPN and Hepcidin in breast cancer tissues and 
+## association of their expression with occurrence of anemia", Shihui Ma, 
+## Feihai Ling, et al.
+
+# Retractions without DOIs, by publication year
+rw |>
+  ggplot(aes(x = pub.year)) +
+    geom_histogram(binwidth = 1, fill = "darkgreen") +
+    theme_linedraw()
+
+# Restrict to 2000-2026
+rw |> filter(!is.na(pub.year)) |>
+  filter(pub.year >= 2000 & pub.year <= 2026) |>
+  ggplot(aes(x = pub.year)) +
+    geom_histogram(binwidth = 1, fill = "darkgreen") +
+    theme_linedraw()
+
+# Majority were published in 2010 specifically??
+rw |> count(pub.year) |> arrange(desc(n))
+```
+
+## DataCite Corpus merged with Retraction Watch
 
 ```{r read_rw_mrged}
 df <- read_csv("merged.csv")
@@ -118,30 +237,31 @@ df |> summarise(
               na.rm = TRUE),
   Prop.NIH = sum(str_detect(data.funders, pattern = "(NIH)|(NATIONAL INSTITUTES OF HEALTH)") |
                 str_detect(data.funders.ror, pattern = "(NIH)|(NATIONAL INSTITUTES OF HEALTH)"),
-                na.rm = TRUE) /
-    nrow(df)
-)  |>
+                na.rm = TRUE) / nrow(df)
+) |>
   t() |>
-  kable()
+  kable(digits = 4)
+
+df |> 
+  filter(
+      str_detect(data.funders, pattern = "(NIH)|(NATIONAL INSTITUTES OF HEALTH)") |
+                str_detect(data.funders.ror, pattern = "(NIH)|(NATIONAL INSTITUTES OF HEALTH)")
+    ) |>
+  select(data.title, data.repository, pub.title, pub.retraction.nature, pub.retraction.reason)
 ```
 
-### Only 1 NIH-funded publication that also appears in RW Database
-
-```{r funder-info}
-
-df |> filter(!is.na(data.funders) | !is.na(data.funders.ror)) |>
-  select(data.title, pub.title, pub.journal, data.funders, data.funders.ror)
-
-```
+There's one retracted paper associated with a data in the DataCite Corpus that also appears in Retraction Watch. Also one of the papers we talked about in the previous article!
 
 ### Number of repositories
 
+See which repositories are associated with retracted papers (tables and data visualizations).
+
 ```{r repos, fig.height=10}
+## For all datasets, with OR without DOIs
+# Table
 df |> count(data.repository) |> arrange(desc(n))
 
-df |> filter(str_detect(data.id, pattern = "10\\.")) |>
-  count(data.repository) |> arrange(desc(n))
-
+# Bar graph
 df |> 
   filter(!is.na(data.repository) & data.repository != "UNPUBLISHED") |>
   mutate(
@@ -157,6 +277,12 @@ df |>
     coord_flip() +
     theme_linedraw()
 
+## For datasets without DOIs
+# Table
+df |> filter(str_detect(data.id, pattern = "10\\.")) |>
+  count(data.repository) |> arrange(desc(n))
+
+# Bar graph
 df |> filter(str_detect(data.id, pattern = "10\\.")) |>
   filter(!is.na(data.repository) & data.repository != "UNPUBLISHED") |>
   mutate(
@@ -172,8 +298,4 @@ df |> filter(str_detect(data.id, pattern = "10\\.")) |>
     coord_flip() +
     theme_linedraw()
 ```
-
-```{}
-
-
 
