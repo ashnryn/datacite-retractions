@@ -1,0 +1,163 @@
+---
+title: "Retraction Watch Data - Data Exploration & Descriptive Statistics"
+author: "Ashvin Narayan"
+date: "2026-10-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+options(scipen = 999)
+
+library(tidyverse)
+library(knitr)
+library(parallel)
+library(foreach)
+library(doParallel)
+
+## TODO: Modify dirpath to current directory
+dirpath = "/Users/ashvin/Desktop/biomed-retractions/datacite"
+
+# Gets the names of files to be read int, then calls rw_merge.
+files <- list.files(path = paste0(dirpath, "/data"), 
+                    full.names = TRUE, recursive = TRUE)
+```
+
+## Retraction Watch Database
+
+```{r rw-data}
+# load retraction watch data
+rw <- data.frame(read.csv(
+  "https://raw.githubusercontent.com/ashnryn/article-retractions/refs/heads/main/retraction-watch/retraction_watch.csv",
+  na.strings = c("", "unavailable")
+))
+
+#### Retraction Watch entries without DOIs ####
+rw <- rw |> filter(is.na(OriginalPaperDOI))
+
+# What journals are represented?
+# rw |> count(Journal) |> arrange(desc(n)) |> head(20)
+rw |> 
+  filter(str_detect(Journal, pattern = "Conference")) |> 
+  nrow() # Majority are conference papers
+
+# Which countries are represented?
+rw |> count(Country) |> 
+  mutate(p = round(n / nrow(rw), 4)) |> 
+  arrange(desc(n)) |>
+  head(20) # Majority were published in China
+
+# Min and max publication dates?
+cbind(min.date = min(rw$OriginalPaperDate), 
+      max.date = max(rw$OriginalPaperDate))
+
+## The 1953 one is the "first ever english language retraction", per RW
+## Benjamin Wilson, "Treatise upon Electricity"
+
+## 2016 is "Expression of FPN and Hepcidin in breast cancer tissues and 
+## association of their expression with occurrence of anemia", Shihui Ma, 
+## Feihai Ling, et al.
+
+# Add publication and retraction years
+rw <- rw |>
+  mutate(pub.year = ifelse(
+    mdy_hm(OriginalPaperDate) %>% is.na(), 
+    mdy_hms(OriginalPaperDate) %>% year() %>% as.integer(),
+    mdy_hm(OriginalPaperDate) %>% year() %>% as.integer()),
+    .after = OriginalPaperDate) |>
+  mutate(ret.year = ifelse(
+    mdy_hm(RetractionDate) %>% is.na(),
+    mdy_hms(RetractionDate) %>% year() %>% as.integer(),
+    mdy_hm(RetractionDate) %>% year() %>% as.integer()),
+    .after = RetractionDate)
+
+# Retractions without DOIs, by publication year
+rw |>
+  ggplot(aes(x = pub.year)) +
+    geom_histogram(binwidth = 1, fill = "darkgreen") +
+    theme_linedraw()
+
+# Restrict to 2000-2026
+rw |> filter(!is.na(pub.year)) |>
+  filter(pub.year >= 2000 & pub.year <= 2026) |>
+  ggplot(aes(x = pub.year)) +
+    geom_histogram(binwidth = 1, fill = "darkgreen") +
+    theme_linedraw()
+
+# Majority were published in 2010 specifically??
+rw |> count(pub.year) |> arrange(desc(n))
+```
+
+### Retraction Reasons
+
+```{r ret-reasons}
+#### FUNCTION: count_reasons_row - string str, optional dataframe rtab ####
+## Takes string (semicolon-separated list) of retraction
+## reasons, initializes/updates rtab as a dataframe of
+## reasons and the number of retractions that list said reasons
+## as reasons for retraction (NOT MUTUALLY EXCLUSIVE).
+count_reasons_row <- function(str, rtab = NULL) {
+  rvec <- str_split(str, pattern = ';', simplify = TRUE)
+  # Drop trailing whitespace
+  rvec <- rvec[-length(rvec)]
+  
+  # Check whether each reason is present in the table,
+  # if not, add to table.
+  for (item in rvec) {
+    if (is.null(rtab)) {
+      rtab <- data.frame(reason = item, n = 1,
+                         stringsAsFactors = FALSE)
+    }
+    else if (!any(str_equal(rtab$reason, item))) {
+      rtab <- rbind(rtab, c("reason" = item, "n" = 1))
+    }
+    # If it is present, add 1 to count for that reason
+    else {
+      rtab$n[which(str_equal(rtab$reason, item))] = 
+        as.integer(rtab$n[which(str_equal(rtab$reason, item))]) + 1
+    }
+  }
+  colnames(rtab) = c("reason", "n")
+  return(rtab)
+}
+
+#### FUNCTION: count_reasons - takes vector of strings strvec
+## Vectorizes count_reasons_row, continuously passing same
+## table of retraction reasons to count_reasons_row.
+count_reasons <- function(strvec) {
+  reason_cts = NULL
+  for (elt in strvec) {
+    reason_cts <- count_reasons_row(elt, reason_cts)
+  }
+  
+  # Update column type of 'n', arrange rows in alphabetical order
+  reason_cts$n = sapply(reason_cts$n, as.integer)
+  reason_cts <- reason_cts %>% arrange(reason)
+  
+  return(reason_cts)
+}
+
+# Pass retraction reasons column to count_reasons
+reasons_tab <- count_reasons(rw$Reason)
+```
+
+### Retraction Reasons - Summary and Visualization
+
+```{r reasons-vis, fig.height = 11, fig.width = 7}
+# How many are image related?
+reasons_tab[which(
+  str_detect(reasons_tab$reason, pattern = "[Ii]mage")
+  ),]
+
+reasons_tab[which(
+  str_detect(reasons_tab$reason, pattern = "[Ii]mage")
+  ),]$n |> sum()
+
+reasons_tab |> ggplot(aes(x = reorder(reason, n), y = n)) +
+  geom_bar(stat = "identity", fill = "rosybrown") +
+  labs(x = "Reason", y = "Count") +
+  coord_flip() +
+  theme_linedraw()
+```
+
+

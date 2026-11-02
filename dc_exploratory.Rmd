@@ -157,65 +157,6 @@ nih_dat |> summarise(
   kable(digits = 4)
 ```
 
-## Retraction Watch Database
-
-```{r rw-data}
-# load retraction watch data
-rw <- data.frame(read.csv(
-  "https://raw.githubusercontent.com/ashnryn/article-retractions/refs/heads/main/retraction-watch/retraction_watch.csv",
-  na.strings = c("", "unavailable")
-))
-
-#### Retraction Watch entries without DOIs ####
-rw <- rw |> filter(is.na(OriginalPaperDOI))
-
-# What journals are represented?
-# rw |> count(Journal) |> arrange(desc(n)) |> head(20)
-rw |> filter(str_detect(Journal, pattern = "Conference")) |> nrow() # Majority are conference papers
-
-# Which countries are represented?
-rw |> count(Country) |> 
-  mutate(p = round(n / nrow(rw), 4)) |> 
-  arrange(desc(n)) |>
-  head(20) # Majority were published in China
-
-rw <- rw |>
-  mutate(across(c(OriginalPaperDate, RetractionDate), as.character)) |>
-  mutate(pub.year = mdy_hm(OriginalPaperDate) |> year() |> as.integer(), 
-         .after = OriginalPaperDate) |>
-  mutate(ret.year = mdy_hm(RetractionDate) |> year() |> as.integer(), 
-         .after = RetractionDate)
-
-rw$pub.year[which(is.na(rw$pub.year))] = 1753
-
-# Min and max publication dates?
-cbind(min.date = min(rw$OriginalPaperDate), 
-      max.date = max(rw$OriginalPaperDate))
-
-## The 1953 one is the "first ever english language retraction", per RW
-## Benjamin Wilson, "Treatise upon Electricity"
-
-## 2016 is "Expression of FPN and Hepcidin in breast cancer tissues and 
-## association of their expression with occurrence of anemia", Shihui Ma, 
-## Feihai Ling, et al.
-
-# Retractions without DOIs, by publication year
-rw |>
-  ggplot(aes(x = pub.year)) +
-    geom_histogram(binwidth = 1, fill = "darkgreen") +
-    theme_linedraw()
-
-# Restrict to 2000-2026
-rw |> filter(!is.na(pub.year)) |>
-  filter(pub.year >= 2000 & pub.year <= 2026) |>
-  ggplot(aes(x = pub.year)) +
-    geom_histogram(binwidth = 1, fill = "darkgreen") +
-    theme_linedraw()
-
-# Majority were published in 2010 specifically??
-rw |> count(pub.year) |> arrange(desc(n))
-```
-
 ## DataCite Corpus merged with Retraction Watch
 
 ```{r read_rw_mrged}
@@ -256,7 +197,7 @@ There's one retracted paper associated with a data in the DataCite Corpus that a
 
 See which repositories are associated with retracted papers (tables and data visualizations).
 
-```{r repos, fig.height=10}
+```{r repos, fig.height = 10}
 ## For all datasets, with OR without DOIs
 # Table
 df |> count(data.repository) |> arrange(desc(n))
@@ -298,4 +239,8 @@ df |> filter(str_detect(data.id, pattern = "10\\.")) |>
     coord_flip() +
     theme_linedraw()
 ```
+
+
+
+
 
