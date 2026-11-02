@@ -90,60 +90,12 @@ rw |> count(pub.year) |> arrange(desc(n))
 
 ### Retraction Reasons
 
-```{r ret-reasons}
-#### FUNCTION: count_reasons_row - string str, optional dataframe rtab ####
-## Takes string (semicolon-separated list) of retraction
-## reasons, initializes/updates rtab as a dataframe of
-## reasons and the number of retractions that list said reasons
-## as reasons for retraction (NOT MUTUALLY EXCLUSIVE).
-count_reasons_row <- function(str, rtab = NULL) {
-  rvec <- str_split(str, pattern = ';', simplify = TRUE)
-  # Drop trailing whitespace
-  rvec <- rvec[-length(rvec)]
-  
-  # Check whether each reason is present in the table,
-  # if not, add to table.
-  for (item in rvec) {
-    if (is.null(rtab)) {
-      rtab <- data.frame(reason = item, n = 1,
-                         stringsAsFactors = FALSE)
-    }
-    else if (!any(str_equal(rtab$reason, item))) {
-      rtab <- rbind(rtab, c("reason" = item, "n" = 1))
-    }
-    # If it is present, add 1 to count for that reason
-    else {
-      rtab$n[which(str_equal(rtab$reason, item))] = 
-        as.integer(rtab$n[which(str_equal(rtab$reason, item))]) + 1
-    }
-  }
-  colnames(rtab) = c("reason", "n")
-  return(rtab)
-}
-
-#### FUNCTION: count_reasons - takes vector of strings strvec
-## Vectorizes count_reasons_row, continuously passing same
-## table of retraction reasons to count_reasons_row.
-count_reasons <- function(strvec) {
-  reason_cts = NULL
-  for (elt in strvec) {
-    reason_cts <- count_reasons_row(elt, reason_cts)
-  }
-  
-  # Update column type of 'n', arrange rows in alphabetical order
-  reason_cts$n = sapply(reason_cts$n, as.integer)
-  reason_cts <- reason_cts %>% arrange(reason)
-  
-  return(reason_cts)
-}
+```{r ret-reasons, fig.height = 11, fig.width = 7}
+source("read_reasons.R", local = knitr::knit_global())
 
 # Pass retraction reasons column to count_reasons
 reasons_tab <- count_reasons(rw$Reason)
-```
 
-### Retraction Reasons - Summary and Visualization
-
-```{r reasons-vis, fig.height = 11, fig.width = 7}
 # How many are image related?
 reasons_tab[which(
   str_detect(reasons_tab$reason, pattern = "[Ii]mage")
@@ -157,6 +109,26 @@ reasons_tab |> ggplot(aes(x = reorder(reason, n), y = n)) +
   geom_bar(stat = "identity", fill = "rosybrown") +
   labs(x = "Reason", y = "Count") +
   coord_flip() +
+  theme_linedraw()
+```
+
+### Retraction Reasons - Compare to full RW dataset
+
+```{r rw-full, fig.height = 12, fig.width = 7}
+# load retraction watch data
+rw_full <- data.frame(read.csv(
+  "https://raw.githubusercontent.com/ashnryn/article-retractions/refs/heads/main/retraction-watch/retraction_watch.csv",
+  na.strings = c("", "unavailable")
+))
+
+# Pass full retraction reasons column to count_reasons
+reasons_tab_full <- count_reasons(rw_full$Reason)
+
+reasons_tab_full |> ggplot(aes(x = reorder(reason, n), y = n)) +
+  geom_bar(stat = "identity", fill = "rosybrown") +
+  labs(x = "Reason", y = "Count") +
+  coord_flip() +
+  theme(text = element_text(size = 1)) +
   theme_linedraw()
 ```
 

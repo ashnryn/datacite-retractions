@@ -1,3 +1,5 @@
+#### merge.R ####
+
 ## Code for merging DataCite Corpus data with data from the
 ## Retraction Watch Database. Merges both raw DataCite data 
 ## and NIH-funded datasets (as output by readdata.R).
