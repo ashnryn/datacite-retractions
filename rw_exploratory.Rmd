@@ -36,7 +36,8 @@ rw <- data.frame(read.csv(
 rw <- rw |> filter(is.na(OriginalPaperDOI))
 
 # What journals are represented?
-# rw |> count(Journal) |> arrange(desc(n)) |> head(20)
+rw |> count(Journal) |> arrange(desc(n)) |> head(20)
+
 rw |> 
   filter(str_detect(Journal, pattern = "Conference")) |> 
   nrow() # Majority are conference papers
@@ -130,6 +131,33 @@ reasons_tab_full |> ggplot(aes(x = reorder(reason, n), y = n)) +
   coord_flip() +
   theme(text = element_text(size = 1)) +
   theme_linedraw()
+```
+
+
+
+```{r reasons-crosstab, cache = TRUE, fig.width = 10}
+reason_cross <- reasons_crosstab(rw$Reason, reasons_tab$reason)
+reason_cross_full <- reasons_crosstab(rw_full$Reason, reasons_tab_full$reason)
+
+reason_cross_prop <- crosstab_proportions(reason_cross, reasons_tab)
+reason_cross_full_prop <- crosstab_proportions(reason_cross_full, reasons_tab_full) |>
+  data.frame()
+
+reason_cross_prop |> 
+  mutate(row = rownames(reason_cross_prop), .before = 1) |>
+  reshape2::melt(id.vars = "row") |>
+  mutate(value = round(value, digits = 4)) |>
+  ggplot(aes(x = row, y = variable, fill = value)) +
+    geom_tile() +
+    scale_x_discrete(breaks = seq(0, 90, by = 3)) +
+    scale_y_discrete(breaks = seq(0, 90, by = 3))
+```
+
+```{r write-crosstabs, eval = FALSE}
+write.csv(reason_cross, "crosstabs/reason_cross_no_doi.csv", row.names = TRUE)
+write.csv(reason_cross_full, "crosstabs/reason_cross_full.csv", row.names = TRUE)
+write.csv(reason_cross_prop, "crosstabs/reason_cross_prop_no_doi.csv", row.names = TRUE)
+write.csv(reason_cross_full_prop, "crosstabs/reason_cross_prop_full.csv", row.names = TRUE)
 ```
 
 

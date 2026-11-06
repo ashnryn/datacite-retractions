@@ -41,7 +41,6 @@ get_dc_summary <- function(filename) {
   ## number & proportion of rows with a 'created' date,
   ## number & proportion of rows with publication dates,
   ## number & proportion of rows with a funder listed.
-  
   dat <- read_csv(file = filename, na = c("", "NA", "none"))
   
   summarylist <- dat |> summarise(

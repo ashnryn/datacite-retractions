@@ -48,3 +48,74 @@ count_reasons <- function(strvec, reason_cts = NULL) {
   
   return(reason_cts)
 }
+
+#### FUNCTION: update_crosstab - string str, string vector reasons_list, ####
+#### optional matrix rmat
+## Assumes str is a semicolon-separated list of retraction reasons, and that
+## reasons_list is the list of all occurring retraction reasons, and all 
+## retraction reasons in str are contained in reasons_list. Optional matrix 
+## rmat is a table of co-occurrences.
+update_crosstab <- function(str, reasons_list, rmat = NULL) {
+  rvec <- str_split(str, pattern = ';', simplify = TRUE)
+  # Drop trailing whitespace
+  rvec <- rvec[-length(rvec)]
+  # Initialize rmat if null
+  if (is.null(rmat)) {
+    rmat <- matrix(0, 
+                   nrow = length(reasons_list), 
+                   ncol = length(reasons_list))
+  }
+  
+  # Add 1 for each co-occurrence - includes co-occurrence w/ self
+  for (elt1 in rvec) {
+    for (elt2 in rvec) {
+      rmat[which(reasons_list == elt1), which(reasons_list == elt2)] = 
+        rmat[which(reasons_list == elt1), which(reasons_list == elt2)] + 1
+    }
+  }
+  
+  return(rmat)
+}
+
+#### FUNCTION: reasons_crosstab - string vector strvec, string vector reasons, ####
+## Vectorizes update_crosstab. Assumes strings in strvec are semicolon-separated 
+## lists of retraction reasons, and that all retraction reasons listed in strvec 
+## strings are also listed in reasons.
+reasons_crosstab <- function(strvec, reasons) {
+  reason_ctab = NULL
+  for (str in strvec) {
+    reason_ctab <- update_crosstab(str, reasons, reason_ctab)
+  }
+  
+  # Rename rows and columns
+  reason_ctab <- data.frame(reason_ctab, row.names = reasons)
+  colnames(reason_ctab) <- reasons
+  
+  return(reason_ctab)
+}
+
+#### FUNCTION: crosstab_proportions - matrix or dataframe arguments cross, totals ####
+## Uses totals dataframe to convert counts to proportions. Assumes totals provides
+## total/topline occurrence of retraction reasons, and cross provides co-occurrence
+## of retraction reasons.
+crosstab_proportions <- function(cross, totals) {
+  cross_prop <- matrix(nrow = nrow(cross),
+                       ncol = ncol(cross),
+                       dimnames = list(totals$reason, totals$reason))
+  
+  for (elt in totals$reason) {
+    cross_prop[,elt] <- 
+      cross[,elt] / totals$n[which(str_equal(totals$reason, elt))]
+  }
+  cross_prop <- data.frame(cross_prop, row.names = rownames(totals))
+  colnames(cross_prop) <- rownames(totals)
+  
+  return(cross_prop)
+}
+
+
+
+
+
+
+
