@@ -87,8 +87,6 @@ rw_merge <- function(filenames) {
 }
 
 
-
-
 ## TODO: Modify dirpath to current directory
 dirpath = "/Users/ashvin/Desktop/biomed-retractions/datacite"
 
@@ -101,13 +99,24 @@ files <- list.files(path = paste0(dirpath, "/data"),
 
 merged <- rw_merge(files)
 
+# merged <- merge(
+#   distinct(merged, publication, .keep_all = TRUE) %>% select(-RetractionNature),
+#   pivot_wider(merged, 
+#               id_cols = publication, 
+#               names_from = RetractionNature, 
+#               values_from = RetractionDOI, 
+#               values_fn = ~ str_flatten(., collapse = ";")
+#               ),
+#   by = "publication"
+# )
+
 colnames(merged) <- c(
+  "pub.doi",
   "data.record.id",
   "data.created.date",
   "data.repository",
   "data.title",
   "data.id",
-  "data.citation.id",
   "data.citation.source",
   "data.funders",
   "data.funders.ror",
@@ -117,11 +126,13 @@ colnames(merged) <- c(
   "pub.journal",
   "pub.publisher",
   "pub.date",
-  "pub.retraction.date",
-  "pub.retraction.doi",
-  "pub.retraction.nature",
-  "pub.retraction.reason"
+  "retraction.date",
+  "retraction.doi",
+  "retraction.nature",
+  "retraction.reason"
 )
+
+merged %>% pivot_wider(id_cols = pub.doi, names_from = retraction.nature, values_from = retraction.doi) %>% nrow()
 
 merged <- merged %>%
   mutate(across(c(pub.date, pub.retraction.date), as.character)) %>%
@@ -129,6 +140,8 @@ merged <- merged %>%
          .after = pub.date) %>%
   mutate(pub.retraction.year = mdy_hm(pub.retraction.date) %>% year() %>% as.integer(), 
          .after = pub.retraction.date)
+
+
 
 write_csv(merged, file = paste(dirpath, outfile, sep = "/"))
 

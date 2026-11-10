@@ -199,10 +199,12 @@ See which repositories are associated with retracted papers (tables and data vis
 ```{r repos, fig.height = 10}
 ## For all datasets, with OR without DOIs
 # Table
-df |> count(data.repository) |> arrange(desc(n))
+df |> distinct(data.citation.id, .keep_all = TRUE) |>
+  count(data.repository) |> arrange(desc(n))
 
 # Bar graph
 df |> 
+  distinct(data.citation.id, .keep_all = TRUE) |>
   filter(!is.na(data.repository) & data.repository != "UNPUBLISHED") |>
   mutate(
       data.repository.mod = str_remove(data.repository, pattern = "\\s\\(.*\\)")
@@ -219,11 +221,13 @@ df |>
 
 ## For datasets without DOIs
 # Table
-df |> filter(str_detect(data.id, pattern = "10\\.")) |>
+df |> distinct(data.citation.id, .keep_all = TRUE) |>
+  filter(str_detect(data.id, pattern = "10\\.")) |>
   count(data.repository) |> arrange(desc(n))
 
 # Bar graph
-df |> filter(str_detect(data.id, pattern = "10\\.")) |>
+df |> distinct(data.citation.id, .keep_all = TRUE) |>
+  filter(str_detect(data.id, pattern = "10\\.")) |>
   filter(!is.na(data.repository) & data.repository != "UNPUBLISHED") |>
   mutate(
       data.repository.mod = str_remove(data.repository, pattern = "\\s\\(.*\\)")
@@ -239,7 +243,109 @@ df |> filter(str_detect(data.id, pattern = "10\\.")) |>
     theme_linedraw()
 ```
 
+### Publishers & Journals
+
+```{r journals, fig.height = 10}
+## Publisher
+df |> distinct(data.citation.id, .keep_all = TRUE) |> 
+  count(pub.publisher) |> arrange(desc(n))
+
+# Bar graph
+df |> 
+  distinct(data.citation.id, .keep_all = TRUE) |>
+  count(pub.publisher) |>
+  head(30) |>
+  ggplot(aes(x = reorder(pub.publisher, n), y = n)) + 
+    geom_bar(stat = "identity", fill = "turquoise3") + 
+    labs(x = "Publisher", y = "Count") +
+    coord_flip() +
+    theme_linedraw()
+
+## Journal
+df |> distinct(data.citation.id, .keep_all = TRUE) |>
+  count(pub.journal) |> arrange(desc(n))
+
+# Bar graph
+df |> 
+  distinct(data.citation.id, .keep_all = TRUE) |>
+  count(pub.journal) |>
+  arrange(desc(n)) |>
+  head(30) |>
+  ggplot(aes(x = reorder(pub.journal, n), y = n)) + 
+    geom_bar(stat = "identity", fill = "turquoise3") + 
+    labs(x = "Publisher", y = "Count") +
+    coord_flip() +
+    theme_linedraw()
+```
+
+### Retractions by year
+
+```{r by-year}
+## By publication year
+df |>
+  distinct(data.citation.id, .keep_all = TRUE) |>
+  ggplot(aes(x = pub.year)) +
+    geom_histogram(binwidth = 1, fill = "seagreen4") +
+    labs(x = "Publication Year", y = "Count") +
+    scale_x_continuous(breaks = seq(1994, 2024, by = 2)) +
+    theme_linedraw()
+  
+## By retraction year
+df |>
+  distinct(data.citation.id, .keep_all = TRUE) |>
+  ggplot(aes(x = pub.retraction.year)) +
+    geom_histogram(binwidth = 1, fill = "seagreen4") +
+    labs(x = "Retraction Year", y = "Count") +
+    scale_x_continuous(breaks = seq(1994, 2024, by = 2)) +
+    theme_linedraw()
+
+## By retraction year, normalized against publication year
+df |> distinct(data.citation.id, .keep_all = TRUE) |>
+  mutate(ret.year.norm = pub.retraction.year - pub.year) |>
+  ggplot(aes(x = ret.year.norm)) +
+    geom_histogram(binwidth = 1, fill = "seagreen4") +
+    geom_vline(aes(xintercept = mean(ret.year.norm, na.rm = TRUE)),
+               linetype = "dashed") +
+    labs(x = "Retraction Year, Normalized", y = "Count") +
+    scale_x_continuous(breaks = seq(0, 20, by = 1)) +
+    theme_linedraw()
+```
+
+### Retraction Reasons - Individual and Co-Occurrences
+
+```{r retr-reasons, fig.width = 8}
+source("read_reasons.R")
+
+reasons_tab <- count_reasons(df$pub.retraction.reason)
+reasons_tab |> arrange(desc(n)) |> head(20)
+
+reasons_ctab <- reasons_crosstab(df$pub.retraction.reason, reasons_tab$reason)
+reasons_prop <- crosstab_proportions(reasons_ctab, reasons_tab)
+
+reasons_prop |> 
+  mutate(row = rownames(reasons_prop), .before = 1) |>
+  reshape2::melt(id.vars = "row") |>
+  mutate(value = round(value, digits = 4)) |>
+  ggplot(aes(x = row, y = variable, fill = value)) +
+    geom_tile() +
+    labs(title = "Co-occurrences of retraction reasons",
+         x = "Reasons (row)", y = "Reasons (column)") +
+    scale_x_discrete(breaks = seq(0, 101, by = 5), guide = guide_axis(n.dodge = 2)) +
+    scale_y_discrete(breaks = seq(0, 101, by = 5)) +
+    theme_linedraw() +
+    theme(legend.position = "none")
+```
+
+```{r write-crosstabs, eval = FALSE}
+write.csv(reasons_ctab, "crosstabs/merged_reasons_ctab.csv", row.names = TRUE)
+write.csv(reasons_prop, "crosstabs/merged_reasons_prop.csv", row.names = TRUE)
+```
+
+## Data-Related Retractions
+
+```{r data-related}
+data_ret <- df |> filter(str_detect(pub.retraction.reason, "[Dd]ata"))
 
 
-
+```
 
