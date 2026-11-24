@@ -1,0 +1,183 @@
+---
+title: "DataCite Corpus - Time Series Correlations"
+author: "Ashvin Narayan"
+date: "2026-10-09"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+options(scipen = 999)
+
+library(tidyverse)
+library(knitr)
+library(parallel)
+library(foreach)
+library(doParallel)
+library(zoo)
+
+dat <- read_csv("merged.csv")
+rw <- data.frame(read.csv(
+  "https://raw.githubusercontent.com/ashnryn/article-retractions/refs/heads/main/retraction-watch/retraction_watch.csv",
+  na.strings = c("", "unavailable"))) |> 
+  filter(!is.na(OriginalPaperDOI)) |>
+  filter(!OriginalPaperDOI %in% dat$data.citation.id)
+```
+
+Plot of total number of retractions by publication month, with rolling average in red.
+
+```{r datavis}
+dat <- dat |> mutate(pub.monthyear = mdy_hm(pub.date) %>% as.yearmon("%Y-%m"))
+rw <- rw |> mutate(pub.monthyear = mdy_hm(OriginalPaperDate) %>% as.yearmon("%Y-%m"))
+
+# full dataset
+dat |>
+  distinct(data.citation.id, .keep_all = TRUE) |>
+  count(pub.monthyear) |> 
+  mutate(avg = cummean(n)) |>
+  ggplot(aes(x = pub.monthyear, y = n)) +
+    geom_point(pch = 1) +
+    geom_line(aes(x = pub.monthyear, y = avg), 
+              size = 0.75, alpha = 0.4, colour = "red") +
+    labs(x = "Publication Month", y = "Count") +
+    theme_linedraw()
+
+# Subset - 2020-25 only
+dat |>
+  distinct(data.citation.id, .keep_all = TRUE) |>
+  filter(pub.year >= 2020) |>
+  count(pub.monthyear) |> 
+  mutate(avg = cummean(n)) |>
+  ggplot(aes(x = pub.monthyear, y = n)) +
+    geom_point(pch = 1) +
+    geom_line(aes(x = pub.monthyear, y = avg), 
+              size = 0.75, alpha = 0.4, colour = "red") +
+    labs(x = "Publication Month", y = "Count") +
+    theme_linedraw()
+
+# Compare to full RW dataset
+rw |> distinct(OriginalPaperDOI, .keep_all = TRUE) |>
+  count(pub.monthyear) |>
+  mutate(avg = cummean(n)) |>
+  ggplot(aes(x = pub.monthyear, y = n)) +
+    geom_point(pch = 1) +
+    geom_line(aes(x = pub.monthyear, y = avg),
+              size = 0.75, alpha = 0.4, colour = "red") +
+    labs(x = "Publication Month", y = "Count") +
+    theme_linedraw()
+
+rw |> distinct(OriginalPaperDOI, .keep_all = TRUE) |>
+  count(pub.monthyear) |>
+  ggplot(aes(x = pub.monthyear, y = n)) +
+    geom_line() +
+    geom_line(aes(x = pub.monthyear, y = n), 
+              data = dat %>% 
+                distinct(data.citation.id, .keep_all = TRUE) %>%
+                count(pub.monthyear),
+              colour = "blue") +
+    labs(x = "Publication Month", y = "Count") +
+    theme_linedraw()
+```
+
+Notable - the major spike in RW entries around 2010-11 is not mirrored in the growth of the 'merged' dataset
+
+```{r data-wrangle}
+## For merged RW/DataCite data
+aggdata <- dat |> 
+  distinct(data.citation.id, .keep_all = TRUE) |>
+  count(pub.monthyear)
+
+monthyears = c()
+for (yr in seq(min(dat$pub.year), max(dat$pub.year), by = 1)) {
+  monthyears <- monthyears |> append(
+    paste0("01", tolower(month.abb), yr) %>% 
+      as.Date(format = "%d%b%Y") %>%
+      as.yearmon()
+    )
+}
+
+monthyears <- data.frame(monthyear = monthyears, n = c(0))[-c(1:3),]
+aggdata <- monthyears |> 
+  full_join(aggdata, by = join_by(monthyear == pub.monthyear))
+
+aggdata <- aggdata |> 
+  mutate(n = ifelse(is.na(n.y), n.x, n.y)) |>
+  select(monthyear, n)
+
+tsdat <- ts(
+  data = aggdata$n,
+  start = c(1997, 4),
+  end = c(2021, 12),
+  frequency = 12
+)
+
+tsdat
+
+## For Retraction Watch only
+aggrw <- rw |>
+  distinct(OriginalPaperDOI, .keep_all = TRUE) |>
+  count(pub.monthyear)
+
+monthyears = c()
+for (yr in seq(min(rw$OriginalPaperDate %>% mdy_hm() %>% year()), 
+               max(rw$OriginalPaperDate %>% mdy_hm() %>% year()), 
+               by = 1)) {
+  monthyears <- monthyears |> append(
+    paste0("01", tolower(month.abb), yr) %>% 
+      as.Date(format = "%d%b%Y") %>%
+      as.yearmon()
+    )
+}
+
+monthyears <- data.frame(monthyear = unlist(monthyears), n = c(0))
+aggrw <- monthyears |> 
+  full_join(aggrw, by = join_by(monthyear == pub.monthyear))
+
+aggrw <- aggrw |> 
+  mutate(n = ifelse(is.na(n.y), n.x, n.y)) |>
+  select(monthyear, n)
+
+tsrw <- ts(
+  data = aggrw$n,
+  start = c(1940, 1),
+  end = c(2025, 12),
+  frequency = 12
+)
+
+rm(monthyears)
+```
+
+```{r correlation}
+# Autocorrelation
+acf(tsdat)
+acf(tsrw)
+
+# Partial autocorrelation
+pacf(tsdat)
+pacf(tsrw)
+
+# Cross-correlation
+ccf(tsdat, tsrw)
+
+# Restrict tsrw to April 1997-Dec 2024
+tsrw_limit <- ts(data = aggrw$n[c(688:1020)],
+                 start = c(1997, 4),
+                 end = c(2024, 12),
+                 frequency = 12)
+ccf(tsdat, tsrw_limit)
+
+# Regression diagnostics
+lm(n ~ monthyear, data = aggrw) %>% plot()
+lm(n ~ monthyear, data = aggdata) %>% plot()
+
+lm(n ~ monthyear, data = aggdata)
+lm(n ~ monthyear, data = aggrw)
+
+# Decomposition
+tsrw_decomp <- decompose(tsrw)
+tsdat_decomp <- decompose(tsdat)
+
+plot(tsrw_decomp)
+plot(tsdat_decomp)
+```
+

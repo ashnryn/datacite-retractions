@@ -14,6 +14,7 @@ library(knitr)
 library(parallel)
 library(foreach)
 library(doParallel)
+library(zoo)
 
 ## TODO: Modify dirpath to current directory
 dirpath = "/Users/ashvin/Desktop/biomed-retractions/datacite"
@@ -281,22 +282,25 @@ df |>
 ### Retractions by year
 
 ```{r by-year}
+df <- df |> mutate(pub.monthyear = mdy_hm(pub.date) %>% as.yearmon("%Y-%m"))
+
 ## By publication year
 df |>
   distinct(data.citation.id, .keep_all = TRUE) |>
-  ggplot(aes(x = pub.year)) +
-    geom_histogram(binwidth = 1, fill = "seagreen4") +
-    labs(x = "Publication Year", y = "Count") +
-    scale_x_continuous(breaks = seq(1994, 2024, by = 2)) +
+  count(pub.monthyear) |>
+  ggplot(aes(x = pub.monthyear, y = n)) +
+    geom_line() +
+    labs(x = "Publication Month", y = "Count") +
     theme_linedraw()
   
 ## By retraction year
 df |>
   distinct(data.citation.id, .keep_all = TRUE) |>
-  ggplot(aes(x = pub.retraction.year)) +
-    geom_histogram(binwidth = 1, fill = "seagreen4") +
+  mutate(ret.monthyear = mdy_hm(pub.date) %>% as.yearmon("%Y-%m")) |>
+  count(ret.monthyear) |>
+  ggplot(aes(x = ret.monthyear, y = n)) +
+    geom_line() +
     labs(x = "Retraction Year", y = "Count") +
-    scale_x_continuous(breaks = seq(1994, 2024, by = 2)) +
     theme_linedraw()
 
 ## By retraction year, normalized against publication year
@@ -316,10 +320,15 @@ df |> distinct(data.citation.id, .keep_all = TRUE) |>
 ```{r retr-reasons, fig.width = 8}
 source("read_reasons.R")
 
-reasons_tab <- count_reasons(df$pub.retraction.reason)
+reasons_tab <- count_reasons(distinct(
+  df, data.citation.id, .keep_all = TRUE
+  )$pub.retraction.reason)
 reasons_tab |> arrange(desc(n)) |> head(20)
 
-reasons_ctab <- reasons_crosstab(df$pub.retraction.reason, reasons_tab$reason)
+reasons_ctab <- reasons_crosstab(distinct(
+  df, data.citation.id, .keep_all = TRUE
+  )$pub.retraction.reason, 
+  reasons_tab$reason)
 reasons_prop <- crosstab_proportions(reasons_ctab, reasons_tab)
 
 reasons_prop |> 
@@ -345,7 +354,9 @@ write.csv(reasons_prop, "crosstabs/merged_reasons_prop.csv", row.names = TRUE)
 
 ```{r data-related}
 data_ret <- df |> filter(str_detect(pub.retraction.reason, "[Dd]ata"))
-
+data_ret |> distinct(data.citation.id) |> nrow()
 
 ```
+
+
 
