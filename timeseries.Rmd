@@ -148,9 +148,19 @@ rm(monthyears)
 ```
 
 ```{r correlation}
+
+## TODO: estimate average 'response time' between publication
+## and retraction using RW data, limit dataset frames based
+## on that
+
 # Autocorrelation
-acf(tsdat)
-acf(tsrw)
+acf(tsdat, lag.max = 60)
+acf(tsrw, lag.max = 60)
+
+## Autocorrelation doesn't really show cyclical/seasonal patterns
+## Likely shows a trend of general increase (this would likely
+## appear even stronger if we time-limit, since we're currently 
+## including the 'drop off' post-2023
 
 # Partial autocorrelation
 pacf(tsdat)
@@ -179,5 +189,13 @@ tsdat_decomp <- decompose(tsdat)
 
 plot(tsrw_decomp)
 plot(tsdat_decomp)
+
+## Both have general upward trends, and fairly clear seasonal
+## patterns, but random effects seem too large to draw any
+## real conclusions regarding visible patterns in the data
+
+## Question as to whether we can/should drop observations 
+## from 2010? TODO: Double check whether this is specifically 
+## related to the Hindawi thing
 ```
 
